@@ -45,3 +45,8 @@ conda install pytorch3d -c pytorch3d
 ```
 FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@v0.2.0"
 ```
+
+### References
+1. https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md
+2. https://github.com/facebookresearch/pytorch3d/issues/824#issuecomment-909449926
+3. https://github.com/facebookresearch/pytorch3d/issues/1161#issuecomment-1186602126
