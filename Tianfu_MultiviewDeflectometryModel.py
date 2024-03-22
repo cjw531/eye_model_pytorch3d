@@ -15,8 +15,6 @@ from scipy.ndimage import gaussian_filter
 from skimage import img_as_ubyte
 import matplotlib.pyplot as plt
 from ipywidgets import interactive, interact
-# from utils import image_grid, plot_camera_scene
-# from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import ToTensor
 
 from PIL import Image
@@ -47,30 +45,33 @@ from pytorch3d.renderer import (
     SoftSilhouetteShader, HardPhongShader, PointLights, Materials, TexturedSoftPhongShader
 )
 
-# from Tianfu_MultiviewNormalShader import Tianfu_MultiviewNormalShader
 from Tianfu_MultiviewReflectionMappingShader import Tianfu_MultiviewReflectionMappingShader 
 
 def gaussian_blur_torch(in_tensor, sigma=0):
+    '''
+    Apply Gaussian blur to a 2D tensor
+    '''
+
     if sigma > 0:
         # create Gaussian matrix
-        kernel_width = 4*int(np.ceil(sigma))+1
-        xp = np.linspace(-kernel_width/2,kernel_width/2,kernel_width) # grid is scaled -1,1
-        Y,X = np.meshgrid(xp, xp);
-        G = np.exp(-(X**2 + Y**2)/2/sigma)[None, None, ...]
-        G = torch.tensor(G, dtype=in_tensor.dtype).to(in_tensor.device)
-        G = G/G.sum()
+        kernel_width = 4 * int(np.ceil(sigma)) + 1
+        xp = np.linspace(-kernel_width / 2, kernel_width / 2, kernel_width) # grid is scaled -1,1
+        Y, X = np.meshgrid(xp, xp)
+        G = np.exp(-(X**2 + Y**2) / 2 / sigma)[None, None, ...] # 2D Gaussian distribution
+        G = torch.tensor(G, dtype=in_tensor.dtype).to(in_tensor.device) # conver to PyTorch tensor
+        G = G/G.sum() # normalize to sum to 1
         
         # create Gaussian weights for each color channel
         if in_tensor.dim() < 3:
             in_tensor = in_tensor[...,None]
-        H,W,C = in_tensor.shape            
-        w = torch.zeros((C,C,kernel_width,kernel_width), dtype=in_tensor.dtype).to(in_tensor.device)
+        H, W, C = in_tensor.shape
+
+        w = torch.zeros((C, C, kernel_width, kernel_width), dtype=in_tensor.dtype).to(in_tensor.device)
         for c in range(C):
-            w[c,c,:,:] = G;
+            w[c, c, : , :] = G
 
         # blur the input tensor
-        blurred = F.conv2d(in_tensor.permute(2,0,1)[None,...], \
-                           weight=w, padding=kernel_width//2).permute(0,2,3,1).squeeze()
+        blurred = F.conv2d(in_tensor.permute(2,0,1)[None,...], weight=w, padding=kernel_width//2).permute(0,2,3,1).squeeze()
         
         return blurred
     else:
@@ -973,21 +974,21 @@ class Tianfu_MultiviewDeflectometryModel(nn.Module):
 
         
 def GenerateSphereSmoothVerts(xy = None, z = None, radius = 0.01185, latitudes = 100, longitudes = 100, dtype = torch.float32, device = "cuda:0"):
-    verts = torch.zeros(((latitudes + 1) * (longitudes + 1), 3), dtype= dtype,device = device)
+    '''
+    Generate vertices
+    '''
+
+    verts = torch.zeros(((latitudes + 1) * (longitudes + 1), 3), dtype= dtype,device = device) # sphere vertices
     
-    
-    latitudeAngles = torch.linspace(np.pi/2, -np.pi/2, latitudes + 1, dtype= dtype,device = device)
-    # z = torch.linspace(-1, 1, latitudes + 1, dtype= dtype,device = device)
+    latitudeAngles = torch.linspace(np.pi/2, -np.pi/2, latitudes + 1, dtype=dtype, device=device)
     z_radius = radius * torch.sin(latitudeAngles)
     xy_radius = torch.sqrt(radius * radius - z_radius * z_radius)
     if z != None:
         z_radius[latitudes//2:] = radius* z
-    # z[10:] = torch.linspace(0, -1, 55, dtype= dtype,device = device)
-    # xy = torch.sqrt(radius * radius * torch.ones_like(z) - z * z)
-    # xy[latitudes//2:] = torch.linspace(xy[latitudes//2], 0, latitudes + 1 - latitudes//2, dtype= dtype,device = device)
     if xy != None:        
         xy_radius[latitudes//2:] = radius * xy
-    logitudeAngles = torch.linspace(0, 2 * np.pi, longitudes + 1, dtype= dtype,device = device)
+    logitudeAngles = torch.linspace(0, 2 * np.pi, longitudes + 1, dtype=dtype, device=device)
+
     x = torch.outer(xy_radius, torch.cos(logitudeAngles))
     x = x.flatten()
     y = torch.outer(xy_radius, torch.sin(logitudeAngles)).flatten()
@@ -996,29 +997,36 @@ def GenerateSphereSmoothVerts(xy = None, z = None, radius = 0.01185, latitudes =
     verts[:, 0] = x
     verts[:, 1] = y
     verts[:, 2] = z_radius
+
     return verts
 
 def GenerateSphereSmoothFaces(latitudes = 100, longitudes = 100, dtype = torch.int64, device = "cuda:0"):
-    k1 = 0 
-    k2 = 0
-    faces = torch.zeros(( 2 * (latitudes  - 1) * (longitudes), 3), dtype= dtype,device = device)
+    '''
+    Generate smooth faces of a smooth sphere
+    '''
+
+    k1, k2 = 0, 0
     offset = 0
+    faces = torch.zeros((2 * (latitudes  - 1) * (longitudes), 3), dtype=dtype, device=device)
+    
     for i in range(latitudes):
-        k1 = i * (longitudes + 1);
-        k2 = k1 + longitudes + 1;
+        k1 = i * (longitudes + 1)
+        k2 = k1 + longitudes + 1
+
         for j in range(longitudes):
             if (i != 0):
                 faces[offset, 0] = k1
                 faces[offset, 1] = k2
                 faces[offset, 2] = k1 + 1
-                offset =offset + 1
+                offset += 1
             if (i != (latitudes - 1)):
                 faces[offset, 0] = k1 + 1
                 faces[offset, 1] = k2
                 faces[offset, 2] = k2 + 1
-                offset = offset + 1
-            k1 = k1 + 1
-            k2 = k2 + 1
+                offset += 1
+            k1 += 1
+            k2 += 1
+
     return faces
 
 def getCurvature(pa, pb, pc):
