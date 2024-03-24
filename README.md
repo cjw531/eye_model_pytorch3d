@@ -42,8 +42,10 @@ conda install pytorch3d -c pytorch3d
 ```
 
 ### 7. Install PyTorch3D from GitHub (ver. 0.2.0)
+If CUDA Toolkit environment path is NOT specified, then add `FORCE_CUDA=1` before `pip` command
+
 ```
-FORCE_CUDA=1 pip install "git+https://github.com/facebookresearch/pytorch3d.git@v0.2.0"
+pip install "git+https://github.com/facebookresearch/pytorch3d.git@v0.2.0"
 ```
 
 ### References
